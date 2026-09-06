@@ -138,16 +138,17 @@ oracle.
 | Initial understanding and architecture | No checkpoint was created before noon. | Not met; cannot be backdated. |
 | Last stable state before the Noon Curveball | No 11:45 AM checkpoint or pre-noon stable commit exists. | Not met; cannot be backdated. |
 | Fresh-session reconstruction | Local Entire record 74c103fc007c6aacd0d1fc591b2cb53b50466464, session 01a0758d-bff5-7f01-92cd-25fea00253d0, created at 12:40:52 IST. | Post-Curveball recovery evidence only; it is not a verified remote checkpoint link. |
-| Curveball response and final verification | Final commits record the tested implementation and Graph evidence; no separate final Entire checkpoint was generated. | Code/docs verification met; final-checkpoint milestone not met. |
+| Curveball response and final verification | Local Entire checkpoint `c4f8c7ce08ed`, created by the normal Codex `manual-commit` strategy after the final Graph-verification documentation commit. Inspect locally with `entire checkpoint explain c4f8c7ce08ed --json`. | Final checkpoint exists locally; remote synchronization and a shareable checkpoint link are not verified. |
 
 The baseline commit a0cd69382e6ce20c30142deac935703b44f0a6ce was created after noon.
 It is a recovery baseline, not evidence that the pre-Curveball process
 requirement was met.
 
 The guide asks for four accessible checkpoint links. Those links are not
-available for this submission: the initial, pre-noon, and final checkpoints
-were not created, and the local recovery record cannot be verified as a
-remote checkpoint. This is disclosed rather than fabricated.
+available for this submission: the initial and pre-noon checkpoints were not
+created, and both the recovery record and final checkpoint are local-only with
+remote synchronization unavailable at verification time. This is disclosed
+rather than fabricated.
 
 ## Setup, run, and test instructions
 
@@ -206,9 +207,8 @@ model API keys are required.
   and end-to-end lifecycle tests before being claimed as supported.
 - The adapter supports the documented legacy shape and the supplied new event
   fixture, not every possible third-party transcript schema.
-- The post-Curveball recovery record is local-only and cannot be presented as
-  a verified remote checkpoint link; a separate final implementation checkpoint
-  was not generated.
+- The post-Curveball recovery record and final checkpoint `c4f8c7ce08ed` are
+  local-only and cannot be presented as verified remote checkpoint links.
 - The pre-noon checkpoint milestones were missed and cannot be repaired
   retroactively. The evidence above distinguishes the recovery work from
   compliant pre-noon work.
