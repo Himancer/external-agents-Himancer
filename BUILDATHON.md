@@ -129,7 +129,7 @@ not as an oracle.
 | Initial understanding and architecture | No checkpoint was created before noon. | Not met; cannot be backdated. |
 | Last stable state before the Noon Curveball | No 11:45 AM checkpoint or pre-noon stable commit exists. | Not met; cannot be backdated. |
 | Fresh-session reconstruction | Local Entire checkpoint 74c103fc007c6aacd0d1fc591b2cb53b50466464, session 01a0758d-bff5-7f01-92cd-25fea00253d0, created at 12:40:52 IST. | Post-Curveball recovery evidence only; it is not presented as a pre-noon checkpoint. |
-| Curveball response and final verification | Final commit plus the final local checkpoint created after this revision. | Created/verified as part of finalization; see entire checkpoint list --json. |
+| Curveball response and final verification | Final commits record the tested implementation and Graph evidence; no separate final Entire checkpoint was generated. | Code/docs verification met; final-checkpoint milestone not met. |
 
 The baseline commit a0cd69382e6ce20c30142deac935703b44f0a6ce was created after noon.
 It is a recovery baseline, not evidence that the pre-Curveball process
@@ -184,8 +184,8 @@ model API keys are required.
   and end-to-end lifecycle tests before being claimed as supported.
 - The adapter supports the documented legacy shape and the supplied new event
   fixture, not every possible third-party transcript schema.
-- The current Entire checkpoint is local and unsynced; remote checkpoint links
-  cannot be claimed until sync succeeds.
+- The post-Curveball recovery checkpoint has synced to origin, but a separate
+  final implementation checkpoint was not generated.
 - The pre-noon checkpoint milestones were missed and cannot be repaired
   retroactively. The evidence above distinguishes the recovery work from
   compliant pre-noon work.
