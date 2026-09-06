@@ -1,0 +1,8 @@
+Read AGENT.md and summarize the Universal Agent Memory baseline. Do not edit files.
+
+---
+
+Do not edit any files. We need a genuine final Entire checkpoint for the current final submission. First inspect the current repository status, final Git commit, and BUILDATHON.md. Reconstruct the project’s intent and Curveball response from the existing code and documentation. Then complete this session normally so Entire records a final checkpoint through its Codex hooks. Do not invent, backdate, or claim pre-noon checkpoints. At the end, report the exact output of:
+entire status --json
+entire checkpoint list --json
+entire checkpoint explain <new-checkpoint-id> --json
