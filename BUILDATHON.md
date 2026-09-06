@@ -122,13 +122,14 @@ The final semantic diff is run before submission with:
 entire graph diff --repo . --base a0cd69382e6ce20c30142deac935703b44f0a6ce --head HEAD --json
 ~~~
 
-The final diff was run against commit 79d54fa. It identified the changed
-capture and handoff command paths plus the new shared TranscriptAnalysis
-parser and analyzer handlers. The graph reported three bounded blind spots:
-the two JSONL fixtures and PowerShell verification script have no supported
-semantic parser. Those files were verified directly through unit tests and the
-Windows verification script. Graph output is treated as evidence to verify,
-not as an oracle.
+The final diff was run after the functional implementation and rerun after the
+Windows setup documentation correction. It identified the changed capture and
+handoff command paths plus the new shared TranscriptAnalysis parser and
+analyzer handlers. The graph reported three bounded blind spots: the two JSONL
+fixtures and PowerShell verification script have no supported semantic parser.
+Those files were verified directly through unit tests and the Windows
+verification script. Graph output is treated as evidence to verify, not as an
+oracle.
 
 ## Checkpoint links and what each checkpoint proves
 
