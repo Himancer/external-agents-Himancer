@@ -94,8 +94,8 @@ TranscriptAnalysis as a legacy record.
 
 ~~~powershell
 $env:ENTIRE_REPO_ROOT = (Get-Location).Path
-.entire-agent-universal-memory.exe capture --transcript .internalmemory	estdata	rack-3-event-format.jsonl
-.entire-agent-universal-memory.exe handoff --session-id btw-track3-demo-001
+./entire-agent-universal-memory.exe capture --transcript ./internal/memory/testdata/track-3-event-format.jsonl
+./entire-agent-universal-memory.exe handoff --session-id btw-track3-demo-001
 ~~~
 
 A legacy transcript without source-agent metadata is labelled
@@ -115,10 +115,13 @@ silently presented as provenance.
 ## Verification
 
 ~~~powershell
-mise run test
-mise run build
-.scriptserify-universal-memory.ps1
+go test ./...
+go build -o entire-agent-universal-memory.exe ./cmd/entire-agent-universal-memory
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File ./scripts/verify-universal-memory.ps1 -AgentBin ./entire-agent-universal-memory.exe
 ~~~
+
+If mise is installed and on PATH, `mise run test` and `mise run build` are
+equivalent convenience commands.
 
 The unit tests cover redaction, safe storage, protocol-session/handoff namespace
 separation, legacy parsing, new event parsing, unknown events, incomplete

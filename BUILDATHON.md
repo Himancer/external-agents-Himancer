@@ -28,6 +28,14 @@ directory. The product's key value - preserving development context across a
 workflow boundary - is therefore supplied through Entire's external agent
 protocol and local checkpoint-oriented workflow.
 
+## Submission identity
+
+- GitHub fork: [Himancer/external-agents-Himancer](https://github.com/Himancer/external-agents-Himancer)
+- Submission branch: [buildathon/universal-agent-memory](https://github.com/Himancer/external-agents-Himancer/tree/buildathon/universal-agent-memory)
+- Entire India mirror: `entire://aws-ap-south-1.entire.io/gh/himancer/external-agents-himancer`
+- Code implementation commit: [6750384](https://github.com/Himancer/external-agents-Himancer/commit/6750384dfa5d35fe3bb8421e25f7a9f0b83ca47b)
+- The submission form must use the final branch-head SHA printed by `git rev-parse HEAD`; documentation-only commits made after the implementation can change that SHA.
+
 ## Architecture and main workflow
 
 ~~~text
@@ -128,35 +136,48 @@ not as an oracle.
 | --- | --- | --- |
 | Initial understanding and architecture | No checkpoint was created before noon. | Not met; cannot be backdated. |
 | Last stable state before the Noon Curveball | No 11:45 AM checkpoint or pre-noon stable commit exists. | Not met; cannot be backdated. |
-| Fresh-session reconstruction | Local Entire checkpoint 74c103fc007c6aacd0d1fc591b2cb53b50466464, session 01a0758d-bff5-7f01-92cd-25fea00253d0, created at 12:40:52 IST. | Post-Curveball recovery evidence only; it is not presented as a pre-noon checkpoint. |
+| Fresh-session reconstruction | Local Entire record 74c103fc007c6aacd0d1fc591b2cb53b50466464, session 01a0758d-bff5-7f01-92cd-25fea00253d0, created at 12:40:52 IST. | Post-Curveball recovery evidence only; it is not a verified remote checkpoint link. |
 | Curveball response and final verification | Final commits record the tested implementation and Graph evidence; no separate final Entire checkpoint was generated. | Code/docs verification met; final-checkpoint milestone not met. |
 
 The baseline commit a0cd69382e6ce20c30142deac935703b44f0a6ce was created after noon.
 It is a recovery baseline, not evidence that the pre-Curveball process
 requirement was met.
 
+The guide asks for four accessible checkpoint links. Those links are not
+available for this submission: the initial, pre-noon, and final checkpoints
+were not created, and the local recovery record cannot be verified as a
+remote checkpoint. This is disclosed rather than fabricated.
+
 ## Setup, run, and test instructions
 
-From the repository root on Windows PowerShell:
+Install Go 1.26 or newer and make `go` available on PATH. Then, from the
+repository root on Windows PowerShell:
 
 ~~~powershell
 cd agents/entire-agent-universal-memory
-mise run test
-mise run build
-.entire-agent-universal-memory.exe info
-.scriptserify-universal-memory.ps1
+go test ./...
+go vet ./...
+go build -o entire-agent-universal-memory.exe ./cmd/entire-agent-universal-memory
+./entire-agent-universal-memory.exe info
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File ./scripts/verify-universal-memory.ps1 -AgentBin ./entire-agent-universal-memory.exe
 ~~~
 
-If mise is unavailable, install Go 1.26 or newer and use:
+If `mise` is installed and on PATH, `mise run test` and `mise run build` are
+equivalent convenience commands. They are optional; this host did not rely on
+them for the verified path above.
+
+To demonstrate the parser and handoff manually after building:
 
 ~~~powershell
-go test ./...
-go build -o entire-agent-universal-memory.exe ./cmd/entire-agent-universal-memory
+./entire-agent-universal-memory.exe capture --transcript ./internal/memory/testdata/track-3-event-format.jsonl
+./entire-agent-universal-memory.exe handoff --session-id btw-track3-demo-001
 ~~~
 
 The critical-path verification script creates a temporary runtime directory,
 captures the committed Track 3 event fixture, and reads the resulting handoff.
 It does not deploy an application or contact an external model API.
+Use this command for the live terminal demonstration; a short fallback screen
+recording is recommended before judging.
 
 ### Verified locally
 
@@ -184,8 +205,9 @@ model API keys are required.
   and end-to-end lifecycle tests before being claimed as supported.
 - The adapter supports the documented legacy shape and the supplied new event
   fixture, not every possible third-party transcript schema.
-- The post-Curveball recovery checkpoint has synced to origin, but a separate
-  final implementation checkpoint was not generated.
+- The post-Curveball recovery record is local-only and cannot be presented as
+  a verified remote checkpoint link; a separate final implementation checkpoint
+  was not generated.
 - The pre-noon checkpoint milestones were missed and cannot be repaired
   retroactively. The evidence above distinguishes the recovery work from
   compliant pre-noon work.

@@ -12,32 +12,28 @@ BUILDATHON.md.
 ## Requirements
 
 - Go 1.26 or newer
-- Optional: mise, which reads this directory's mise.toml
+- Optional: mise, if it is installed and available on PATH
 - No model API key or external service is required
 
 ## Build and test
 
 ~~~powershell
 cd agents/entire-agent-universal-memory
-mise run test
-mise run build
-.entire-agent-universal-memory.exe info
-~~~
-
-Without mise:
-
-~~~powershell
 go test ./...
 go vet ./...
 go build -o entire-agent-universal-memory.exe ./cmd/entire-agent-universal-memory
+./entire-agent-universal-memory.exe info
 ~~~
+
+If mise is installed and on PATH, `mise run test` and `mise run build` are
+equivalent convenience commands.
 
 ## Demonstrate the critical path
 
 On Windows:
 
 ~~~powershell
-.scriptserify-universal-memory.ps1
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File ./scripts/verify-universal-memory.ps1 -AgentBin ./entire-agent-universal-memory.exe
 ~~~
 
 On Bash-compatible systems:
@@ -54,8 +50,8 @@ a review-only recommendation.
 
 ~~~powershell
 $env:ENTIRE_REPO_ROOT = (Get-Location).Path
-.entire-agent-universal-memory.exe capture --transcript .internalmemory	estdata	rack-3-event-format.jsonl
-.entire-agent-universal-memory.exe handoff --session-id btw-track3-demo-001
+./entire-agent-universal-memory.exe capture --transcript ./internal/memory/testdata/track-3-event-format.jsonl
+./entire-agent-universal-memory.exe handoff --session-id btw-track3-demo-001
 ~~~
 
 The adapter advertises transcript_analyzer support. It does not advertise
