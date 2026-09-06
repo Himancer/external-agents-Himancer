@@ -1,0 +1,189 @@
+# Universal Agent Memory
+
+## One-sentence summary
+
+Universal Agent Memory is a local Entire external-agent adapter that turns a
+coding agent's legacy or lifecycle-event JSONL transcript into a bounded,
+redacted, reviewable handoff for the next developer or deployment workflow.
+
+## Problem, intended user, and why it matters
+
+Developers frequently switch from a coding agent to another developer, a
+reviewer, or a deployment workflow. A Git diff shows what changed but not the
+user intent, test result, open question, or checkpoint that explains why the
+change is safe. The intended user is a developer who needs to hand work off
+without pasting an unbounded or secret-bearing chat transcript into a second
+tool.
+
+## Selected Entire track and why Entire is essential
+
+**Track 3 - Bring Entire to a New Agent or Workflow.**
+
+This is an Entire external-agent binary, not a wrapper that merely invokes an
+Entire command. It implements protocol v1 session helpers, transcript
+chunking/reassembly, transcript-analyzer commands, and a repository-scoped
+handoff store. Entire can discover the binary and use its analyzer contract;
+the adapter then keeps handoff state below the repository's .entire runtime
+directory. The product's key value - preserving development context across a
+workflow boundary - is therefore supplied through Entire's external agent
+protocol and local checkpoint-oriented workflow.
+
+## Architecture and main workflow
+
+~~~text
+legacy role/content JSONL OR new lifecycle-event JSONL
+                         |
+                         v
+             one normalizer / TranscriptAnalysis
+                         |
+                         v
+ capture --transcript -> bounded, redacted HandoffContext
+                         |
+                         v
+ .entire/universal-memory/handoffs/<id>.json
+                         |
+                         v
+ handoff --session-id -> review-only deployment recommendations
+~~~
+
+- Opaque Entire protocol session envelopes are kept separately at
+  .entire/universal-memory/sessions/<id>.json.
+- Handoff packets live at
+  .entire/universal-memory/handoffs/<id>.json; the two namespaces prevent
+  a protocol session from overwriting a same-named handoff.
+- capture accepts explicit fields or --transcript <path>. It records a session
+  ID, developer intent, changed files, checkpoint reference, open questions,
+  transcript format, and whether the context is complete.
+- handoff never deploys anything. It returns review recommendations and
+  prominently labels a partial input as PARTIAL.
+- Obvious bearer tokens, provider keys, AWS-style keys, and credential-like
+  environment assignments are redacted before persistence or analyzer output.
+
+## Noon Curveball: what changed and how we adapted
+
+### Invalidated assumption
+
+The baseline assumed one documented legacy JSONL shape with role and content.
+The Track 3 Curveball supplied a new lifecycle-event JSONL format with records
+such as session_started, user_prompt, file_changed, and checkpoint_created.
+
+### Revised design
+
+We did **not** duplicate capture or handoff implementations. A single parser
+normalizes both formats into TranscriptAnalysis; the existing capture and
+handoff paths consume that shared result. The event fixture supplied at noon
+is represented in
+agents/entire-agent-universal-memory/internal/memory/testdata/track-3-event-format.jsonl.
+The legacy test fixture is an internal fixture derived from the format that
+the pre-Curveball adapter documentation described; it is not claimed to be an
+organizer-supplied legacy fixture.
+
+### Safety behaviour
+
+- A named event the adapter does not understand is ignored, counted, and
+  returned as a warning; known records remain usable.
+- A malformed non-final record fails clearly rather than silently hiding
+  corruption.
+- A malformed terminal record yields a partial result containing all prior
+  valid records. Its incremental position does not advance, so a later read
+  can consume the completed record rather than losing it.
+- The latest checkpoint in a transcript is selected consistently with its
+  latest summary and intent.
+- Existing opaque protocol-session storage remains separate from handoff
+  storage and has a regression test for same-ID collision safety.
+
+## Entire Graph findings and verification
+
+Graph was used before changing the parser and handoff path:
+
+~~~powershell
+entire graph search --repo . --profile full --query "transcript session handoff checkpoint capture"
+entire graph impact --repo . --symbol HandoffContext --depth 2
+~~~
+
+The search located captureCommand, protocol-session helpers, and the two
+runtime storage paths. The HandoffContext impact result identified its
+sanitization, persistence (Save, Load, and Latest), and DeploymentPlan
+consumers. Source review confirmed that a shared normalized representation
+could be added at the parser boundary without changing the existing
+protocol-session write/read contract.
+
+The final semantic diff is run before submission with:
+
+~~~powershell
+entire graph diff --repo . --base a0cd69382e6ce20c30142deac935703b44f0a6ce --head HEAD --json
+~~~
+
+Its result is recorded in the final commit history and is checked against the
+unit tests below; graph output is treated as evidence to verify, not as an
+oracle.
+
+## Checkpoint links and what each checkpoint proves
+
+| Required milestone | Evidence | Honest status |
+| --- | --- | --- |
+| Initial understanding and architecture | No checkpoint was created before noon. | Not met; cannot be backdated. |
+| Last stable state before the Noon Curveball | No 11:45 AM checkpoint or pre-noon stable commit exists. | Not met; cannot be backdated. |
+| Fresh-session reconstruction | Local Entire checkpoint 74c103fc007c6aacd0d1fc591b2cb53b50466464, session 01a0758d-bff5-7f01-92cd-25fea00253d0, created at 12:40:52 IST. | Post-Curveball recovery evidence only; it is not presented as a pre-noon checkpoint. |
+| Curveball response and final verification | Final commit plus the final local checkpoint created after this revision. | Created/verified as part of finalization; see entire checkpoint list --json. |
+
+The baseline commit a0cd69382e6ce20c30142deac935703b44f0a6ce was created after noon.
+It is a recovery baseline, not evidence that the pre-Curveball process
+requirement was met.
+
+## Setup, run, and test instructions
+
+From the repository root on Windows PowerShell:
+
+~~~powershell
+cd agents/entire-agent-universal-memory
+mise run test
+mise run build
+.entire-agent-universal-memory.exe info
+.scriptserify-universal-memory.ps1
+~~~
+
+If mise is unavailable, install Go 1.26 or newer and use:
+
+~~~powershell
+go test ./...
+go build -o entire-agent-universal-memory.exe ./cmd/entire-agent-universal-memory
+~~~
+
+The critical-path verification script creates a temporary runtime directory,
+captures the committed Track 3 event fixture, and reads the resulting handoff.
+It does not deploy an application or contact an external model API.
+
+### Verified locally
+
+- go test ./... passes.
+- go vet ./... passes.
+- The shared external-agent protocol compliance harness passes against a
+  freshly built adapter binary.
+- A local capture -> handoff run using the supplied Track 3 event fixture
+  preserves AcmeCode, the coupon-validation intent, two changed files,
+  checkpoint cp-001, and the unresolved validation-order question.
+
+## Databricks use, data sources, and limitations
+
+Databricks is not used in this submission. The product is intentionally a
+local, file-backed workflow so it can preserve context without uploading raw
+transcripts to another service. The committed transcript fixtures are
+synthetic demonstration data supplied for the Buildathon format exercise or
+derived from the documented legacy shape; no customer data, credentials, or
+model API keys are required.
+
+## Known limitations and next steps
+
+- Native Codex, Copilot, and other IDE lifecycle hooks are deliberately not
+  advertised by this adapter (hooks: false). They need real source payloads
+  and end-to-end lifecycle tests before being claimed as supported.
+- The adapter supports the documented legacy shape and the supplied new event
+  fixture, not every possible third-party transcript schema.
+- The current Entire checkpoint is local and unsynced; remote checkpoint links
+  cannot be claimed until sync succeeds.
+- The pre-noon checkpoint milestones were missed and cannot be repaired
+  retroactively. The evidence above distinguishes the recovery work from
+  compliant pre-noon work.
+- A production version should add verified native hook adapters, a broader
+  versioned schema registry, and real agent CLI lifecycle tests.

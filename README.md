@@ -16,6 +16,7 @@ External agents communicate with Entire CLI via subcommands that accept and retu
 
 | Agent | Directory | Status |
 |-------|-----------|--------|
+| [Universal Agent Memory](agents/entire-agent-universal-memory/) | `agents/entire-agent-universal-memory/` | Preview - dual-format transcript analysis + controlled capture/handoff; native hooks intentionally unverified |
 | [Kiro](agents/entire-agent-kiro/) | `agents/entire-agent-kiro/` | Implemented — hooks + transcript analysis |
 | [Amp](agents/entire-agent-amp/) | `agents/entire-agent-amp/` | Implemented — hooks + transcript analysis + token calculation + compact transcripts |
 | [Qwen Code](agents/entire-agent-qwen/) | `agents/entire-agent-qwen/` | Implemented — hooks + transcript analysis + compact transcripts |

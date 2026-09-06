@@ -28,14 +28,17 @@ var safeSessionID = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$`)
 // a deployment workflow. CheckpointRef is an evidence link, not a claim that
 // Entire supports arbitrary checkpoint metadata.
 type HandoffContext struct {
-	HandoffID         string   `json:"handoff_id"`
-	SourceAgent       string   `json:"source_agent"`
-	TargetAgent       string   `json:"target_agent,omitempty"`
-	DeveloperIntent   string   `json:"developer_intent"`
-	StructuralChanges []string `json:"structural_changes"`
-	UnresolvedRisks   []string `json:"unresolved_risks,omitempty"`
-	CheckpointRef     string   `json:"checkpoint_ref,omitempty"`
-	CreatedAt         string   `json:"created_at"`
+	HandoffID         string           `json:"handoff_id"`
+	SourceAgent       string           `json:"source_agent"`
+	TargetAgent       string           `json:"target_agent,omitempty"`
+	DeveloperIntent   string           `json:"developer_intent"`
+	StructuralChanges []string         `json:"structural_changes"`
+	UnresolvedRisks   []string         `json:"unresolved_risks,omitempty"`
+	CheckpointRef     string           `json:"checkpoint_ref,omitempty"`
+	CreatedAt         string           `json:"created_at"`
+	ContextStatus     TranscriptStatus `json:"context_status,omitempty"`
+	TranscriptFormat  TranscriptFormat `json:"transcript_format,omitempty"`
+	ContextWarnings   []string         `json:"context_warnings,omitempty"`
 }
 
 // HandoffResult is the deployment-side response. It explicitly states that it
@@ -114,8 +117,21 @@ func Sanitize(context HandoffContext) (HandoffContext, error) {
 	context.CheckpointRef = limit(Redact(strings.TrimSpace(context.CheckpointRef)), maxItemBytes)
 	context.StructuralChanges = sanitizeList(context.StructuralChanges, maxChanges)
 	context.UnresolvedRisks = sanitizeList(context.UnresolvedRisks, maxRisks)
+	context.ContextWarnings = sanitizeList(context.ContextWarnings, maxTranscriptWarnings)
 	if len(context.StructuralChanges) == 0 {
 		return HandoffContext{}, errors.New("structural_changes is required")
+	}
+	if context.ContextStatus == "" {
+		context.ContextStatus = TranscriptStatusComplete
+	}
+	if context.ContextStatus != TranscriptStatusComplete && context.ContextStatus != TranscriptStatusPartial {
+		return HandoffContext{}, errors.New("context_status must be complete or partial")
+	}
+	if context.TranscriptFormat == "" {
+		context.TranscriptFormat = TranscriptFormatManual
+	}
+	if !validTranscriptFormat(context.TranscriptFormat) {
+		return HandoffContext{}, errors.New("invalid transcript_format")
 	}
 	if context.CreatedAt == "" {
 		context.CreatedAt = time.Now().UTC().Format(time.RFC3339)
@@ -124,8 +140,9 @@ func Sanitize(context HandoffContext) (HandoffContext, error) {
 }
 
 func containsUnsafe(context HandoffContext) bool {
-	values := append([]string{context.SourceAgent, context.TargetAgent, context.DeveloperIntent, context.CheckpointRef}, context.StructuralChanges...)
+	values := append([]string{context.SourceAgent, context.TargetAgent, context.DeveloperIntent, context.CheckpointRef, string(context.TranscriptFormat)}, context.StructuralChanges...)
 	values = append(values, context.UnresolvedRisks...)
+	values = append(values, context.ContextWarnings...)
 	for _, value := range values {
 		if strings.Contains(value, "\x00") || strings.Contains(value, "-----BEGIN") {
 			return true

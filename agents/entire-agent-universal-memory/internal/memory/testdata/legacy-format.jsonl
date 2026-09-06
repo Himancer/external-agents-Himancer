@@ -1,0 +1,3 @@
+{"timestamp":"2026-09-06T09:00:00Z","session_id":"legacy-session-001","role":"user","content":"Add Redis caching to the checkout service.","modified_files":["internal/cache.go"]}
+{"timestamp":"2026-09-06T09:00:10Z","session_id":"legacy-session-001","role":"assistant","content":"I will add cache invalidation and tests."}
+{"timestamp":"2026-09-06T09:01:00Z","session_id":"legacy-session-001","role":"assistant","content":"Redis caching and tests are complete.","modified_files":["tests/cache_test.go"],"checkpoint_ref":"legacy-cp-001"}

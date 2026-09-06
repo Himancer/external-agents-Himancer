@@ -47,7 +47,9 @@ func run(args []string, stdout io.Writer) error {
 			IsPreview:       true,
 			ProtectedDirs:   []string{".entire/universal-memory"},
 			HookNames:       []string{},
-			Capabilities:    capabilities{},
+			Capabilities: capabilities{
+				TranscriptAnalyzer: true,
+			},
 		}
 	case "detect":
 		response = struct {
@@ -69,6 +71,14 @@ func run(args []string, stdout io.Writer) error {
 		return writeSession(os.Stdin)
 	case "read-transcript":
 		return readTranscript(args[1:], stdout)
+	case "get-transcript-position":
+		return getTranscriptPosition(args[1:], stdout)
+	case "extract-modified-files":
+		return extractModifiedFiles(args[1:], stdout)
+	case "extract-prompts":
+		return extractPrompts(args[1:], stdout)
+	case "extract-summary":
+		return extractSummary(args[1:], stdout)
 	case "chunk-transcript":
 		return chunkTranscript(args[1:], os.Stdin, stdout)
 	case "reassemble-transcript":

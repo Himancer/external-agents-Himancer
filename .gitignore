@@ -4,4 +4,6 @@
 # Built binaries
 /agents/entire-agent-kiro/entire-agent-kiro
 /agents/entire-agent-kilo/entire-agent-kilo
+/agents/entire-agent-universal-memory/entire-agent-universal-memory
+/agents/entire-agent-universal-memory/entire-agent-universal-memory.exe
 bin/

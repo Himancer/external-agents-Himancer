@@ -1,88 +1,130 @@
-# Universal Agent Memory — External Agent Research
+# Universal Agent Memory - External Agent Design
 
-## Verdict: COMPATIBLE
+## Verdict
 
-Universal Agent Memory is a controlled, file-backed developer workflow rather than an adapter for an existing third-party IDE. Its CLI captures a coding handoff and exposes the resulting session through Entire's external-agent protocol. This makes the cross-agent handoff deterministic, locally testable, and usable without an API key.
+Universal Agent Memory is a **preview-compatible** Entire external-agent
+adapter for a controlled coding-to-handoff workflow. It deliberately supports
+the protocol features it can verify locally and does not claim unverified
+native IDE lifecycle hooks.
 
-## Static Checks
+## What it does
 
-| Check | Result | Notes |
+The binary captures bounded, redacted developer context and makes it available
+to a later review or deployment workflow:
+
+1. A caller supplies handoff fields directly, or runs capture with a transcript.
+2. One normalizer reads either the documented legacy role/content JSONL shape
+   or the Track 3 lifecycle-event JSONL shape.
+3. The result is stored as a HandoffContext under the selected repository.
+4. A later handoff command reads that context and returns recommendations only;
+   it never executes a deployment.
+
+## Runtime layout
+
+All runtime data remains below the repository selected by ENTIRE_REPO_ROOT
+(or the current working directory).
+
+| Purpose | Location |
+| --- | --- |
+| Opaque Entire protocol session envelope | .entire/universal-memory/sessions/<session-id>.json |
+| Validated coding-to-deployment handoff | .entire/universal-memory/handoffs/<handoff-id>.json |
+
+The namespaces are intentionally separate. A protocol session and a handoff
+can use the same identifier without overwriting each other. Runtime state is
+ignored by Git.
+
+## Transcript formats
+
+### Legacy format
+
+The original documented format is JSONL records with role, content, session_id,
+and optional modified_files, new_files, deleted_files, checkpoint_ref, or
+summary fields. This is the compatibility baseline for existing users.
+
+### Event format
+
+The Curveball format uses JSONL lifecycle events including session_started,
+user_prompt, agent_response, file_changed, checkpoint_created, and
+session_ended. A new event is normalized into the same internal
+TranscriptAnalysis as a legacy record.
+
+### Format safety
+
+- Unknown named events do not crash parsing. They are counted and returned in
+  warnings while known context stays available.
+- A malformed non-final record is an explicit error because it may indicate
+  hidden corruption.
+- A malformed final record yields partial context containing every valid prior
+  record. It is not counted in the incremental position, so a later read can
+  process it after the writer completes it.
+- Text, paths, and warnings are redacted and bounded before they leave the
+  parser.
+- The most recent checkpoint reference is paired with its most recent intent
+  and summary.
+
+## Protocol mapping
+
+| Command | Behaviour |
+| --- | --- |
+| info, detect | Declares protocol v1, preview metadata, and transcript_analyzer support. |
+| get-session-id, get-session-dir, resolve-session-file | Implements required session helpers. |
+| read-session, write-session | Round-trips opaque protocol session envelopes. |
+| read-transcript, chunk-transcript, reassemble-transcript | Safely reads repo-local session data and handles byte-preserving transcript chunks. |
+| get-transcript-position | Returns completed JSONL record count. |
+| extract-modified-files | Returns ordered, deduplicated changed files after an offset. |
+| extract-prompts | Returns user prompts after an offset. |
+| extract-summary | Returns the latest summary and whether one exists. |
+| capture | Persists a bounded handoff, optionally derived from --transcript. |
+| handoff | Returns stored context and deployment review recommendations; it does not deploy. |
+| format-resume-command | Formats the explicit handoff resume command. |
+
+## Selected capabilities
+
+| Capability | Value | Reason |
 | --- | --- | --- |
-| Adapter binary | PENDING | Built as `entire-agent-universal-memory`. |
-| Protocol documentation | PASS | Entire external-agent protocol v1 was reviewed. |
-| Entire CLI | PASS | Available on `PATH`. |
-| Native third-party hook source | NOT APPLICABLE | The workflow owns its capture command; it does not claim unverified Copilot or Codex hooks. |
+| hooks | false | Native Codex/Copilot payloads and lifecycle behaviour have not been verified. |
+| transcript_analyzer | true | The four analyzer commands support the legacy and supplied event JSONL formats. |
+| transcript_preparer | false | No conversion is required before normalization. |
+| token_calculator | false | The workflow has no trustworthy provider token count. |
+| text_generator | false | The workflow does not require a model API key. |
+| hook_response_writer | false | There is no verified native hook response transport. |
+| subagent_aware_extractor | false | Not in this focused MVP. |
 
-## Binary
+## Capture and handoff example
 
-- Name: `entire-agent-universal-memory`
-- Protocol version: `1`
-- Install: build the module, put the executable on an absolute `PATH` entry, and enable external agents in Entire's local settings.
+~~~powershell
+$env:ENTIRE_REPO_ROOT = (Get-Location).Path
+.entire-agent-universal-memory.exe capture --transcript .internalmemory	estdata	rack-3-event-format.jsonl
+.entire-agent-universal-memory.exe handoff --session-id btw-track3-demo-001
+~~~
 
-## Workflow and Hook Mechanism
+A legacy transcript without source-agent metadata is labelled
+legacy-workflow, and that fallback is placed in context_warnings rather than
+silently presented as provenance.
 
-The companion workflow writes structured coding handoffs to a repository-local runtime directory. `capture` is the coding-side boundary; `handoff` is the deployment-side boundary. A future hook wrapper can call `capture` on a supported native agent event, but native hooks are not declared until they are verified on this machine.
+## Data safety
 
-| Workflow action | Entire concept | Status |
-| --- | --- | --- |
-| `capture` | Session/turn data is persisted | Planned |
-| `handoff` | Deployment agent reads the latest bounded context | Planned |
-| Native IDE hook | `parse-hook`/`install-hooks` | Not declared; requires real payload capture |
+- Handoff fields have fixed size and list bounds.
+- Obvious provider credentials, bearer tokens, AWS-style keys, and sensitive
+  environment assignments are redacted.
+- Unsafe PEM-like content and NUL bytes are rejected before persistence.
+- Missing handoff context returns an explicit unavailable result.
+- A partial transcript produces a partial handoff message and requires review;
+  it is never called authoritative.
 
-## Session Management
+## Verification
 
-- Session directory: `<repo>/.entire/universal-memory/sessions/`
-- Session ID source: explicit `--session-id` supplied by the workflow; a generated ID is allowed for local demos.
-- Session format: JSONL with a bounded, redacted handoff packet.
-- Runtime state: never committed. The adapter creates it only below the repository supplied by `ENTIRE_REPO_ROOT` or `--repo-path`.
+~~~powershell
+mise run test
+mise run build
+.scriptserify-universal-memory.ps1
+~~~
 
-## Transcript
+The unit tests cover redaction, safe storage, protocol-session/handoff namespace
+separation, legacy parsing, new event parsing, unknown events, incomplete
+terminal input, incremental recovery, latest checkpoint selection, missing
+analyzer input, and capture/handoff behaviour.
 
-- Location: `<session directory>/<session-id>.jsonl`
-- Format: JSONL with `role`, `content`, and timestamp fields.
-- User prompt field: `content` where `role` is `user`.
-- Modified files: optional string array in session metadata.
-- Token usage: not available in deterministic mode.
-
-## Protocol Mapping
-
-| Subcommand | Native concept | Implementation notes | Feasibility |
-| --- | --- | --- | --- |
-| `info`, `detect` | Static workflow metadata | Declares protocol v1 and only implemented capabilities | Required |
-| Session helpers | File-backed session store | Resolve safe paths below the runtime session directory | Required |
-| `read-session`, `write-session` | Handoff envelope | Preserve opaque transcript bytes and metadata | Required |
-| Transcript chunk/reassemble | Raw JSONL bytes | Base64 chunks, deterministic round trip | Required |
-| Resume command | `universal-memory handoff` | Names the session explicitly | Required |
-| Hooks | Controlled workflow events | Deferred until native source payloads are verified | Not declared initially |
-| Transcript analyzer | JSONL records | Extract prompts and summary after core compliance works | Planned |
-
-## Selected Capabilities
-
-| Capability | Declared initially | Justification |
-| --- | --- | --- |
-| hooks | false | No unverified native hook integration. |
-| transcript_analyzer | false | Added only after core protocol compliance. |
-| transcript_preparer | false | JSONL needs no conversion. |
-| token_calculator | false | Deterministic mode has no provider token data. |
-| text_generator | false | OpenAI is optional and must not be required for the workflow. |
-| hook_response_writer | false | No native hook response transport. |
-| subagent_aware_extractor | false | Not part of the MVP. |
-
-## Data Safety
-
-- Handoff data is length-bounded before persistence.
-- Obvious bearer tokens, API keys, and credentials are redacted before write.
-- Missing context produces an explicit missing-context result; it never fabricates a deployment or a prior decision.
-- Raw prompts can contain sensitive data, so the runtime directory is ignored and no sample secret is committed.
-
-## Captured Payloads
-
-- Verification script: `scripts/verify-universal-memory.sh`
-- Status: UNVERIFIED for native IDE hooks. The script validates the controlled CLI workflow and records the exact limitation instead of pretending a native hook was observed.
-
-## E2E Test Prerequisites
-
-- Entire CLI: `entire` on `PATH`.
-- Adapter binary: built from this module and exposed on an absolute `PATH`.
-- Native IDE runtime: not required for deterministic protocol/unit tests.
-- Interactive lifecycle tests: blocked until a real agent CLI and `tmux` are available on this Windows host.
+Native IDE hooks remain an explicit known limitation. An end-to-end lifecycle
+test will be added only after real hook payloads and supported agent CLIs are
+available.

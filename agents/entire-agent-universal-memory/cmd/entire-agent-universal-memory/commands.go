@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"flag"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -51,17 +52,83 @@ func captureCommand(args []string, stdout io.Writer) error {
 	changes := fs.String("changed", "", "comma-separated structural changes")
 	risks := fs.String("risk", "", "comma-separated unresolved risks")
 	checkpoint := fs.String("checkpoint-ref", "", "checkpoint or commit evidence reference")
+	transcript := fs.String("transcript", "", "legacy or event JSONL transcript path")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
-	if *id == "" {
-		return errors.New("session-id is required")
+	context := memory.HandoffContext{
+		HandoffID:         *id,
+		SourceAgent:       *source,
+		TargetAgent:       *target,
+		DeveloperIntent:   *intent,
+		StructuralChanges: memory.ParseList(*changes),
+		UnresolvedRisks:   memory.ParseList(*risks),
+		CheckpointRef:     *checkpoint,
 	}
-	context, err := currentStore().Save(memory.HandoffContext{HandoffID: *id, SourceAgent: *source, TargetAgent: *target, DeveloperIntent: *intent, StructuralChanges: memory.ParseList(*changes), UnresolvedRisks: memory.ParseList(*risks), CheckpointRef: *checkpoint})
+	if *transcript != "" {
+		data, err := readAnalyzerData(*transcript)
+		if err != nil {
+			return fmt.Errorf("read transcript: %w", err)
+		}
+		analysis, err := memory.AnalyzeTranscript(data)
+		if err != nil {
+			return err
+		}
+		if context.HandoffID == "" {
+			context.HandoffID = analysis.SessionID
+		}
+		if context.SourceAgent == "" {
+			context.SourceAgent = analysis.SourceAgent
+		}
+		if context.DeveloperIntent == "" {
+			context.DeveloperIntent = analysis.DeveloperIntent
+		}
+		if len(context.StructuralChanges) == 0 {
+			context.StructuralChanges = analysisFiles(analysis)
+		}
+		if len(context.UnresolvedRisks) == 0 {
+			context.UnresolvedRisks = analysis.OpenQuestions
+		}
+		if context.CheckpointRef == "" {
+			context.CheckpointRef = analysis.CheckpointRef
+		}
+		context.ContextStatus = analysis.Status
+		context.TranscriptFormat = analysis.Format
+		context.ContextWarnings = analysis.Warnings
+		if context.SourceAgent == "" && analysis.Format == memory.TranscriptFormatLegacy {
+			context.SourceAgent = "legacy-workflow"
+			context.ContextWarnings = append(context.ContextWarnings, "legacy transcript did not identify a source agent")
+		}
+	}
+	if context.HandoffID == "" {
+		return errors.New("session-id is required (or provide a transcript with session_id)")
+	}
+	context, err := currentStore().Save(context)
 	if err != nil {
 		return err
 	}
 	return json.NewEncoder(stdout).Encode(context)
+}
+
+func analysisFiles(analysis memory.TranscriptAnalysis) []string {
+	files := make([]string, 0, len(analysis.ModifiedFiles)+len(analysis.NewFiles)+len(analysis.DeletedFiles))
+	for _, group := range [][]string{analysis.ModifiedFiles, analysis.NewFiles, analysis.DeletedFiles} {
+		for _, file := range group {
+			if !contains(files, file) {
+				files = append(files, file)
+			}
+		}
+	}
+	return files
+}
+
+func contains(values []string, wanted string) bool {
+	for _, value := range values {
+		if value == wanted {
+			return true
+		}
+	}
+	return false
 }
 
 func handoffCommand(args []string, stdout io.Writer) error {
@@ -84,7 +151,11 @@ func handoffCommand(args []string, stdout io.Writer) error {
 	if err != nil {
 		return err
 	}
-	return json.NewEncoder(stdout).Encode(memory.HandoffResult{Available: true, Context: &context, DeploymentPlan: memory.DeploymentPlan(context), Message: "Deployment recommendations generated from the captured handoff. No deployment has been executed."})
+	message := "Deployment recommendations generated from the captured handoff. No deployment has been executed."
+	if context.ContextStatus == memory.TranscriptStatusPartial {
+		message = "Deployment recommendations generated from PARTIAL captured context. Review context_warnings before rollout. No deployment has been executed."
+	}
+	return json.NewEncoder(stdout).Encode(memory.HandoffResult{Available: true, Context: &context, DeploymentPlan: memory.DeploymentPlan(context), Message: message})
 }
 
 func getSessionID(stdin io.Reader, stdout io.Writer) error {
@@ -264,6 +335,121 @@ func readTranscript(args []string, stdout io.Writer) error {
 	}
 	_, err = stdout.Write(data)
 	return err
+}
+
+func getTranscriptPosition(args []string, stdout io.Writer) error {
+	fs := flagSet("get-transcript-position")
+	path := fs.String("path", "", "transcript path")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if *path == "" {
+		return errors.New("path is required")
+	}
+	data, err := readOptionalAnalyzerData(*path)
+	if err != nil {
+		return err
+	}
+	position, err := memory.TranscriptPosition(data)
+	if err != nil {
+		return err
+	}
+	return json.NewEncoder(stdout).Encode(struct {
+		Position int `json:"position"`
+	}{Position: position})
+}
+
+func extractModifiedFiles(args []string, stdout io.Writer) error {
+	fs := flagSet("extract-modified-files")
+	path := fs.String("path", "", "transcript path")
+	offset := fs.Int("offset", 0, "already consumed physical record count")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if *path == "" {
+		return errors.New("path is required")
+	}
+	data, err := readOptionalAnalyzerData(*path)
+	if err != nil {
+		return err
+	}
+	analysis, position, err := memory.AnalyzeTranscriptAfterOffset(data, *offset)
+	if err != nil {
+		return err
+	}
+	return json.NewEncoder(stdout).Encode(struct {
+		Files           []string `json:"files"`
+		CurrentPosition int      `json:"current_position"`
+	}{Files: analysisFiles(analysis), CurrentPosition: position})
+}
+
+func extractPrompts(args []string, stdout io.Writer) error {
+	fs := flagSet("extract-prompts")
+	ref := fs.String("session-ref", "", "session reference")
+	offset := fs.Int("offset", 0, "already consumed physical record count")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if *ref == "" {
+		return errors.New("session-ref is required")
+	}
+	data, err := readOptionalAnalyzerData(*ref)
+	if err != nil {
+		return err
+	}
+	analysis, _, err := memory.AnalyzeTranscriptAfterOffset(data, *offset)
+	if err != nil {
+		return err
+	}
+	return json.NewEncoder(stdout).Encode(struct {
+		Prompts []string `json:"prompts"`
+	}{Prompts: analysis.Prompts})
+}
+
+func extractSummary(args []string, stdout io.Writer) error {
+	fs := flagSet("extract-summary")
+	ref := fs.String("session-ref", "", "session reference")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if *ref == "" {
+		return errors.New("session-ref is required")
+	}
+	data, err := readOptionalAnalyzerData(*ref)
+	if err != nil {
+		return err
+	}
+	analysis, err := memory.AnalyzeTranscript(data)
+	if err != nil {
+		return err
+	}
+	return json.NewEncoder(stdout).Encode(struct {
+		Summary    string `json:"summary"`
+		HasSummary bool   `json:"has_summary"`
+	}{Summary: analysis.Summary, HasSummary: analysis.Summary != ""})
+}
+
+func readAnalyzerData(path string) ([]byte, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	var session agentSession
+	if err := json.Unmarshal(data, &session); err == nil && len(session.NativeData) > 0 {
+		return session.NativeData, nil
+	}
+	return data, nil
+}
+
+// readOptionalAnalyzerData preserves the transcript-analyzer contract for a
+// session that has not created its transcript yet. Capture remains strict and
+// uses readAnalyzerData directly.
+func readOptionalAnalyzerData(path string) ([]byte, error) {
+	data, err := readAnalyzerData(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil, nil
+	}
+	return data, err
 }
 
 func chunkTranscript(args []string, stdin io.Reader, stdout io.Writer) error {
