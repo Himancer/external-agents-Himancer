@@ -1,0 +1,7 @@
+[tasks.build]
+description = "Build the Universal Agent Memory adapter"
+run = "go build -o entire-agent-universal-memory ./cmd/entire-agent-universal-memory"
+
+[tasks.test]
+description = "Run adapter unit tests"
+run = "go test ./..."
